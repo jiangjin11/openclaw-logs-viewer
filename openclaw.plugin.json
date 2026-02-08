@@ -1,0 +1,19 @@
+{
+  "id": "logs-viewer",
+  "uiHints": {
+    "enabled": {
+      "label": "Enable Logs Viewer",
+      "help": "Web UI for viewing LLM payload logs and raw streams"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  }
+}

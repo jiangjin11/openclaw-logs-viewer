@@ -1,0 +1,14 @@
+{
+  "name": "@openclaw/logs-viewer",
+  "version": "1.0.0",
+  "description": "OpenClaw LLM payload logs viewer — web UI for inspecting Anthropic API requests and raw streams",
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  },
+  "dependencies": {
+    "openclaw": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
