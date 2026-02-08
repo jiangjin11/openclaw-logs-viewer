@@ -649,37 +649,62 @@ const VIEWER_HTML = `<!DOCTYPE html>
       return filtered;
     }
 
+    function renderEntryHtml(entry) {
+      const stage = entry.stage || 'unknown';
+      const entryKey = getEntryKey(entry);
+      const isExpanded = expandedEntries.has(entryKey);
+      return '<div class="log-entry" data-key="' + entryKey + '">' +
+        '<div class="log-header" onclick="toggleEntry(this, \\'' + entryKey + '\\')">' +
+          '<div class="log-meta">' +
+            '<span class="log-stage stage-' + stage + '">' + stage + '</span>' +
+            '<span>' + formatTimestamp(entry.ts) + '</span>' +
+            '<span>Run: ' + (entry.runId || '-').slice(0, 8) + '</span>' +
+            '<span>Model: ' + (entry.modelId || '-') + '</span>' +
+          '</div>' +
+          '<span class="toggle-icon">' + (isExpanded ? '▲' : '▼') + '</span>' +
+        '</div>' +
+        '<div class="log-body' + (isExpanded ? ' expanded' : '') + '">' + renderPayload(entry) + '</div>' +
+      '</div>';
+    }
+
+    function updateStats() {
+      const statsDiv = document.getElementById('stats');
+      const filtered = getFilteredEntries();
+      statsDiv.innerHTML = 'Showing: ' + filtered.length + ' entries' +
+        (selectedSession ? ' | Session: ' + getSessionDisplayName(selectedSession) : '') +
+        (selectedRun ? ' | Run: ' + selectedRun.slice(0, 8) : '');
+    }
+
     function renderLogs(entries) {
       const logsDiv = document.getElementById('logs');
-      const statsDiv = document.getElementById('stats');
 
       if (entries.length === 0) {
         logsDiv.innerHTML = '<div class="empty-state"><p>No log entries.</p></div>';
-        statsDiv.innerHTML = 'Showing: 0 entries';
-        return;
+      } else {
+        logsDiv.innerHTML = entries.map(renderEntryHtml).join('');
       }
+      updateStats();
+    }
 
-      statsDiv.innerHTML = 'Showing: ' + entries.length + ' entries' +
-        (selectedSession ? ' | Session: ' + getSessionDisplayName(selectedSession) : '') +
-        (selectedRun ? ' | Run: ' + selectedRun.slice(0, 8) : '');
+    /** 增量插入：只在 DOM 顶部插入新条目，不动已有元素 */
+    function prependEntries(newEntries) {
+      const logsDiv = document.getElementById('logs');
+      // 如果当前是空状态，清掉占位
+      const empty = logsDiv.querySelector('.empty-state');
+      if (empty) empty.remove();
 
-      logsDiv.innerHTML = entries.map((entry) => {
-        const stage = entry.stage || 'unknown';
-        const entryKey = getEntryKey(entry);
-        const isExpanded = expandedEntries.has(entryKey);
-        return '<div class="log-entry" data-key="' + entryKey + '">' +
-          '<div class="log-header" onclick="toggleEntry(this, \\'' + entryKey + '\\')">' +
-            '<div class="log-meta">' +
-              '<span class="log-stage stage-' + stage + '">' + stage + '</span>' +
-              '<span>' + formatTimestamp(entry.ts) + '</span>' +
-              '<span>Run: ' + (entry.runId || '-').slice(0, 8) + '</span>' +
-              '<span>Model: ' + (entry.modelId || '-') + '</span>' +
-            '</div>' +
-            '<span class="toggle-icon">' + (isExpanded ? '▲' : '▼') + '</span>' +
-          '</div>' +
-          '<div class="log-body' + (isExpanded ? ' expanded' : '') + '">' + renderPayload(entry) + '</div>' +
-        '</div>';
-      }).join('');
+      const filtered = getFilteredEntries();
+      const filteredNewKeys = new Set(newEntries.map(getEntryKey));
+      const visibleNew = filtered.filter(e => filteredNewKeys.has(getEntryKey(e)));
+      if (visibleNew.length === 0) { updateStats(); return; }
+
+      const fragment = document.createDocumentFragment();
+      const temp = document.createElement('div');
+      temp.innerHTML = visibleNew.map(renderEntryHtml).join('');
+      while (temp.firstChild) fragment.appendChild(temp.firstChild);
+
+      logsDiv.insertBefore(fragment, logsDiv.firstChild);
+      updateStats();
     }
 
     function saveScrollPositions() {
@@ -739,16 +764,18 @@ const VIEWER_HTML = `<!DOCTYPE html>
           const newEntries = data.entries.filter(e => !existingKeys.has(getEntryKey(e)));
 
           if (newEntries.length > 0) {
-            // Prepend new entries
+            // Prepend new entries to data model
             allEntries = [...newEntries, ...allEntries];
             // Limit total entries to avoid memory issues
             const limit = parseInt(document.getElementById('limit').value) || 100;
             if (allEntries.length > limit) {
               allEntries = allEntries.slice(0, limit);
             }
-            renderUI(true); // Preserve scroll positions for incremental refresh
+            // 只插入新条目 DOM + 更新侧栏计数，不动已有元素
+            prependEntries(newEntries);
+            renderSidebar(groupBySession(allEntries));
           }
-          // If no new entries, don't re-render (keep expanded states and scroll)
+          // If no new entries, don't re-render
         } else {
           // Full refresh
           allEntries = data.entries;
